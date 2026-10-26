@@ -1,0 +1,540 @@
+--[[
+Server Name: ✪ New York Noire | Атмосферный RP-сервер
+Server IP:   46.174.50.110:27015
+File Path:   gamemodes/darkrp/entities/entities/spawned_weapon/cl_init.lua
+		 __        __              __             ____     _                ____                __             __         
+   _____/ /_____  / /__  ____     / /_  __  __   / __/____(_)__  ____  ____/ / /_  __     _____/ /____  ____ _/ /__  _____
+  / ___/ __/ __ \/ / _ \/ __ \   / __ \/ / / /  / /_/ ___/ / _ \/ __ \/ __  / / / / /    / ___/ __/ _ \/ __ `/ / _ \/ ___/
+ (__  ) /_/ /_/ / /  __/ / / /  / /_/ / /_/ /  / __/ /  / /  __/ / / / /_/ / / /_/ /    (__  ) /_/  __/ /_/ / /  __/ /    
+/____/\__/\____/_/\___/_/ /_/  /_.___/\__, /  /_/ /_/  /_/\___/_/ /_/\__,_/_/\__, /____/____/\__/\___/\__,_/_/\___/_/     
+                                     /____/                                 /____/_____/                                  
+--]]
+
+include("shared.lua")
+
+function ENT:Initialize()
+	timer.Simple(1, function()
+		if not self.att_saved then
+			net.Start("att_data_spwaned_weapon")
+			net.WriteEntity(self)
+			net.SendToServer()
+		end
+	end)
+	self:SetUpAttachmets(self)
+
+end
+
+function ENT:SetUpAttachmets(ent)
+	ent:SetupBones()
+	local wp = weapons.Get(self:Geteclass())
+	if not wp then return end
+
+	if (wp.Customization ~= nil) then
+		ent.m_CustomizationInUse = {}
+
+		self.WMFixpos = wp.WMFixpos
+
+		for slot, atts in pairs(wp.Customization) do
+			wp:CreateAttachmentForEnts(atts[1], ent)
+		end
+
+		-- ground display fixes, not wanted when the weapon is drawn on a body
+		if self.RagAttached then return end
+
+		if wp.WMDBonelOffsets then
+			local bone = self:LookupBoneCached(ent, wp.WMDBonelOffsets.Bone)
+
+			if (bone ~= nil) then
+				ent:ManipulateBoneAngles(bone, wp.WMDBonelOffsets.Angles)
+				ent:ManipulateBonePosition(bone, wp.WMDBonelOffsets.Pos)
+			end
+		end
+
+		if wp.WorldBoneOffsets then
+			for _,data in ipairs(wp.WorldBoneOffsets) do
+				if data.OnlyWM then continue end
+				bone = self:LookupBoneCached(ent, data.Bone)
+				if (bone ~= nil and bone > 0) then
+					ent:ManipulateBoneAngles(bone, data.Angles)
+					ent:ManipulateBonePosition(bone, data.Pos)
+				end
+			end
+		end
+
+		if wp.applyonwmd then
+			bone = self:LookupBoneCached(ent, wp.WorldModelOffsets.Bone)
+
+			if (bone ~= nil and bone > 0) then
+				ent:ManipulateBoneAngles(bone, wp.WorldModelOffsets.Angles)
+				ent:ManipulateBonePosition(bone, wp.WorldModelOffsets.Pos)
+			end
+		end
+	end
+end
+
+function ENT:DoBodygroup(name, value)
+	if not IsValid(self.C_Model) then return end
+
+	local ind = self.C_Model:FindBodygroupByName(name)
+
+	if (ind == -1) then
+		ind = self.C_Model:FindBodygroupByName(string.Replace(name, "tag_", ""))
+	end
+
+	if (ind ~= -1) then
+		self.C_Model:SetBodygroup(ind, value)
+	end
+end
+
+function ENT:LookupBoneCached(model, name)
+	if (model.cachedBones == nil) then
+		model.cachedBones = {}
+	end
+
+	if (model.cachedBones[name] == nil) then
+		model.cachedBones[name] = model:LookupBone(name)
+	end
+
+	return model.cachedBones[name]
+end
+
+local function doAttMaterialOverride(att, model, ent)
+	if not IsValid(model) then return end
+	for i, mat in pairs(model:GetMaterials()) do
+		local originalPath, originalName = string.GetPathFromFilename(mat), string.GetFileFromFilename(mat)
+		local path, name = att:OverrideMaterial(originalPath, originalName, ent)
+
+		if path ~= originalPath or name ~= originalName then
+			model:SetSubMaterial(i - 1, path .. name)
+		end
+	end
+end
+
+local function doWeaponMaterialOverride(att, model, ent)
+	if not IsValid(model) then return end
+	for i, mat in pairs(model:GetMaterials()) do
+		local originalPath, originalName = string.GetPathFromFilename(mat), string.GetFileFromFilename(mat)
+		local path, name = att:OverrideWeaponMaterial(originalPath, originalName, ent)
+
+		if path ~= originalPath or name ~= originalName then
+			model:SetSubMaterial(i - 1, path .. name)
+		end
+	end
+end
+
+function ENT:VectorAddAndMul(current, add, mul)
+	current.x = current.x + (add.x * mul)
+	current.y = current.y + (add.y * mul)
+	current.z = current.z + (add.z * mul)
+end
+
+function ENT:HasAttachment(att)
+	if not self.att_saved then return false end
+	for _,v in pairs(self.att_saved) do
+		if v["m_Index"] == att then return true end
+	end
+	return false
+end
+
+function ENT:GetTotalAttachmentOffset(currentAttachment)
+	local pos = Vector()
+	local ang = Angle()
+	local offsets = currentAttachment.VElement.Offsets
+
+	if offsets ~= nil then
+		for _, slot in pairs(self.att_saved) do
+			local attachment = slot.attachment
+			if not attachment then return pos, ang end
+
+			if (offsets[attachment.ClassName] ~= nil) then
+				pos:Add(offsets[attachment.ClassName][1])
+				ang:Add(offsets[attachment.ClassName][2])
+			end
+		end
+	end
+
+	return pos, ang
+end
+
+function ENT:MoveVElement(model, attachment)
+	local attModel = model
+	local ve = attachment.VElement
+	local oPos, oAng = self:GetTotalAttachmentOffset(attachment)
+	local ang = Angle()
+	ang:RotateAroundAxis(ang:Forward(), ve.Angles.r + oAng.r)
+	ang:RotateAroundAxis(ang:Right(), ve.Angles.y + oAng.y)
+	ang:RotateAroundAxis(ang:Up(), ve.Angles.p + oAng.p)
+	local pos = Vector()
+	self:VectorAddAndMul(pos, ang:Forward(), ve.Position.y + oPos.y)
+	self:VectorAddAndMul(pos, ang:Right(), ve.Position.x + oPos.x)
+	self:VectorAddAndMul(pos, ang:Up(), ve.Position.z + oPos.z)
+	attModel:SetLocalPos(pos)
+	attModel:SetLocalAngles(ang)
+end
+
+function ENT:CreateAttachmentModel(id, atc)
+	local attachment = table.Copy(MW_ATTS[atc.m_Index])
+	if not attachment then return end
+	if attachment.Bodygroups ~= nil then
+		for bg, v in pairs(attachment.Bodygroups) do
+			self:DoBodygroup(bg, v)
+		end
+	end
+
+	local slot = self.att_saved[id]
+	slot.attachment = attachment
+	if attachment.Model == nil or not attachment.ShowOnWorldModel then return end
+	if IsValid(slot.m_TpModel) then return end
+	slot.m_TpModel = ClientsideModel(attachment.Model, self.RenderGroup)
+	if not slot.m_TpModel or not IsValid(slot.m_TpModel) or slot.m_TpModel == NULL then return end
+	slot.m_TpModel:SetNoDraw(true)
+	slot.m_TpModel:SetMoveType(MOVETYPE_NONE)
+	slot.m_TpModel:SetOwner(self.C_Model)
+	slot.m_TpModel.ShowOnWorldModel = attachment.ShowOnWorldModel
+	doAttMaterialOverride(attachment, slot.m_TpModel, self)
+	doWeaponMaterialOverride(attachment, self.C_Model, self)
+	--slot.m_TpModel:SetParent(self)
+	if attachment.VElement == nil then
+		slot.m_TpModel:AddEffects(EF_BONEMERGE)
+		slot.m_TpModel:AddEffects(EF_BONEMERGE_FASTCULL)
+		slot.m_TpModel:AddEffects(EF_PARENT_ANIMATES)
+		slot.m_TpModel:AddEffects(EF_NOINTERP)
+		if (attachment.BonemergeToAttachment == nil and attachment.BonemergeToCategory == nil) then
+			slot.m_TpModel:SetParent(self.C_Model)
+			slot.m_TpModel.hasParrent = true
+		end
+	else
+		slot.m_TpModel:FollowBone(self.C_Model, self:LookupBoneCached(self.C_Model, attachment.VElement.Bone))
+	end
+
+	if (attachment.VElement ~= nil) then
+		slot.m_TpModel:SetPredictable(false)
+		self:MoveVElement(slot.m_TpModel, attachment)
+		slot.m_TpModel:SetPredictable(true)
+	end
+end
+
+function ENT:RecreateClientsideModels()
+	if self.InitCLM or not self.att_saved then return end
+
+	if not IsValid(self.C_Model) then
+		self.C_Model = ClientsideModel(self.remodel or self:GetModel(), self.RenderGroup)
+		self.C_Model:SetNoDraw(true)
+
+		if self.WMFixpos then
+			local pos, ang = self:GetPos(), self:GetAngles()
+			ang:RotateAroundAxis(ang:Right(), self.WMFixpos[2].x)
+			ang:RotateAroundAxis(ang:Forward(), self.WMFixpos[2].y)
+			ang:RotateAroundAxis(ang:Up(), self.WMFixpos[2].z)
+			self.C_Model:SetPos(pos + ang:Right() * self.WMFixpos[1].x + ang:Forward() * self.WMFixpos[1].y + ang:Up() * self.WMFixpos[1].z)
+			self.C_Model:SetAngles(ang)
+		else
+			self.C_Model:SetPos(self:GetPos())
+			self.C_Model:SetAngles(self:GetAngles())
+		end
+
+		self.C_Model:SetMoveType(MOVETYPE_NONE)
+		self.C_Model:SetOwner(self)
+		self.C_Model:SetParent(self)
+
+		self:SetUpAttachmets(self.C_Model)
+	end
+
+	for name, attachments in pairs(self.att_saved) do
+		self:CreateAttachmentModel(name, attachments)
+	end
+
+	for _, slot in pairs(self.att_saved) do
+		local att = slot.attachment
+
+		if att and att.Bodygroups ~= nil then
+			for bg, v in pairs(att.Bodygroups) do
+				self:DoBodygroup(bg, v)
+			end
+		end
+
+		if not att or att.AttachmentBodygroups == nil then continue end
+
+		if IsValid(slot.m_TpModel) then
+			for bodyGroupName, value in pairs(att.AttachmentBodygroups) do
+				local i = slot.m_TpModel:FindBodygroupByName(bodyGroupName)
+				if i ~= -1 then
+					slot.m_TpModel:SetBodygroup(i, value)
+				end
+			end
+		end
+
+		for _, s1 in pairs(self.att_saved) do
+			if not IsValid(s1.m_TpModel) then continue end
+
+			for bodyGroupName, value in pairs(att.AttachmentBodygroups) do
+				local i = s1.m_TpModel:FindBodygroupByName(bodyGroupName)
+				if i ~= -1 then
+					s1.m_TpModel:SetBodygroup(i, value)
+				end
+			end
+		end
+	end
+
+	self.InitCLM = true
+end
+
+function ENT:RenderModels(ent, attachment, distanceFromCameraOmit)
+	distanceFromCameraOmit = distanceFromCameraOmit or -1
+
+	if (ent._bMWDraw == nil and distanceFromCameraOmit > 0) then
+		ent._bMWDraw = true
+	end
+
+	if (ent._bMWDraw == true or distanceFromCameraOmit <= 0) then
+		ent:DrawModel()
+		ent:SetupBones()
+	end
+
+	if (attachment.BonemergeToAttachment ~= nil or attachment.BonemergeToCategory ~= nil) and not IsValid(ent:GetParent()) then
+		for _, slot in pairs(self.att_saved) do
+			local attParent = slot.attachment
+			if not IsValid(slot.m_TpModel) then continue end
+			if (attParent == attachment) then continue end
+
+			if (attachment.BonemergeToCategory ~= nil and table.HasValue(attachment.BonemergeToCategory, attParent.Category)) then
+				ent:SetParent(slot.m_TpModel)
+				ent.hasParrent = true
+				break
+			end
+
+			if (attachment.BonemergeToAttachment ~= nil and table.HasValue(attachment.BonemergeToAttachment, attParent.ClassName)) then
+				ent:SetParent(slot.m_TpModel)
+				ent.hasParrent = true
+				break
+			end
+
+			if outsource then
+				ent:DrawModel()
+			end
+		end
+	end
+
+	if ent.hasParrent and ent:GetParent() == NULL then
+		for k, v in pairs(self.att_saved) do
+			if not IsValid(v.m_TpModel) then continue end
+			v.m_TpModel:Remove()
+		end
+		self.InitCLM = nil
+		return false
+	end
+end
+
+function ENT:ClearRagdollModels()
+	if IsValid(self.R_Model) then self.R_Model:Remove() end
+	if IsValid(self.C_Model) then self.C_Model:Remove() end
+
+	if self.att_saved then
+		for _, v in pairs(self.att_saved) do
+			if IsValid(v.m_TpModel) then v.m_TpModel:Remove() end
+		end
+	end
+
+	self.InitCLM = nil
+	self.RagHolster = nil
+end
+
+local wepTables = {}
+
+local function GetWepTable(class)
+	local wp = wepTables[class]
+	if wp == nil then
+		wp = weapons.Get(class) or false
+		wepTables[class] = wp
+	end
+	return wp
+end
+
+function ENT:CreateRagModel(wp)
+	local mdl = ClientsideModel(wp.WorldModel, self.RenderGroup)
+	mdl:SetNoDraw(true)
+	mdl:SetSkin(self:GetSkin())
+	if self:GetMaterial() ~= "null" then
+		mdl:SetMaterial(self:GetMaterial())
+	end
+	return mdl
+end
+
+function ENT:ApplyRagManips(mdl, wp)
+	if mdl.ragManip then return end
+	mdl.ragManip = true
+
+	if wp.WorldModelOffsets then
+		local b = self:LookupBoneCached(mdl, wp.WorldModelOffsets.Bone)
+		if b ~= nil and b > 0 then
+			mdl:ManipulateBoneAngles(b, wp.WorldModelOffsets.Angles)
+			mdl:ManipulateBonePosition(b, wp.WorldModelOffsets.Pos)
+		end
+	end
+end
+
+function ENT:DrawOnRagdoll(rag)
+	local wp = GetWepTable(self:Geteclass())
+	if not wp or not wp.WorldModel then return end
+
+	if not self.RagHolster then
+		local b = rag:LookupBone(self:GetNWString("RagBone"))
+		if not b then return end
+		self.RagHolster = {b, self:GetNWVector("RagPos"), self:GetNWAngle("RagAng")}
+	end
+
+	local mat = rag:GetBoneMatrix(self.RagHolster[1])
+	if not mat then return end
+
+	local ang = mat:GetAngles()
+	local pos = VectorOffset(mat:GetTranslation(), self.RagHolster[2], ang)
+	ang = AddAngles(ang, self.RagHolster[3])
+
+	local mdl
+
+	if self.att_saved then
+		self:RecreateClientsideModels()
+		mdl = self.C_Model
+		if not IsValid(mdl) then self.InitCLM = nil return end
+		if IsValid(mdl:GetParent()) then mdl:SetParent(NULL) end
+	else
+		if not IsValid(self.R_Model) then
+			self.R_Model = self:CreateRagModel(wp)
+		end
+		mdl = self.R_Model
+	end
+
+	self:ApplyRagManips(mdl, wp)
+
+	mdl:SetPos(pos)
+	mdl:SetAngles(ang)
+	mdl:SetRenderOrigin(pos)
+	mdl:SetRenderAngles(ang)
+	mdl:DrawModel()
+
+	if self.att_saved then
+		for _, v in pairs(self.att_saved) do
+			if not v.m_TpModel or not IsValid(v.m_TpModel) then continue end
+			self:RenderModels(v.m_TpModel, v.attachment)
+		end
+	end
+end
+
+function ENT:Draw()
+	if LocalPlayer():GetPos():DistToSqr(self:GetPos()) > 350000 then return end
+
+	local rag = self:GetRagAttach()
+
+	if IsValid(rag) then
+		if not self.RagAttached then
+			self:ClearRagdollModels()
+			self.RagAttached = true
+		end
+		self:DrawOnRagdoll(rag)
+		return
+	elseif self.RagAttached then
+		self.RagAttached = nil
+		self:ClearRagdollModels()
+	end
+
+	if self.att_saved then
+		self:RecreateClientsideModels()
+
+		if IsValid(self.C_Model) then
+			if self.C_Model:GetParent() == NULL then
+				self.C_Model:Remove()
+				return
+			end
+			self.C_Model:DrawModel()
+		else
+		 	self.InitCLM = nil
+		end
+
+		for k, v in pairs(self.att_saved) do
+			if not v.m_TpModel or not IsValid(v.m_TpModel) then continue end
+			self:RenderModels(v.m_TpModel, v.attachment)
+		end
+	else
+		self:DrawModel()
+	end
+
+	if self.hookah_ef and self.data then
+		if self.data.time < CurTime() then
+			self.hookah_ef = nil
+			self.data = nil
+			return
+		end
+		for i = 1, 5 do
+			local effect = self.hookah_ef:Add("effects/splash4", self:LocalToWorld(self.data.smoke))
+			effect:SetVelocity(self.data.aim * -200 + VectorRand() * 35)
+			effect:SetDieTime(math.Rand(0.1,0.2))
+			effect:SetStartAlpha(math.Rand(50,150))
+			effect:SetEndAlpha(0)
+			effect:SetStartSize(0)
+			effect:SetEndSize(math.Rand(15, 30))
+			effect:SetRoll( math.Rand(0, 360) )
+			effect:SetRollDelta(math.Rand(-1, 1))
+			effect:SetGravity(VectorRand() * 10)
+			effect:SetCollide(true)
+			effect:SetBounce(0.1)
+			effect:SetAirResistance(20)
+			effect:SetCollideCallback( function( particleC, HitPos, normal )
+				particleC:SetAngleVelocity( Angle( 0, 0, 0 ) )
+				particleC:SetVelocity( Vector( 0, 0, 0 ) )
+				particleC:SetPos( HitPos + normal * 0.1 )
+				particleC:SetGravity( Vector( 0, 0, 0 ) )
+				local angles = normal:Angle()
+				angles:RotateAroundAxis( normal, particleC:GetAngles().y )
+				particleC:SetAngles( angles )
+				particleC:SetLifeTime( 0 )
+				particleC:SetDieTime( 10 )
+				particleC:SetStartSize( 8 )
+				particleC:SetEndSize( 0 )
+				particleC:SetStartAlpha( 128 )
+				particleC:SetEndAlpha( 0 )
+			end )
+		end
+	end
+end
+
+function ENT:OnRemove()
+	if IsValid(self.R_Model) then self.R_Model:Remove() end
+
+	if self.att_saved then
+		if IsValid(self.C_Model) then self.C_Model:Remove() end
+
+		for k, v in pairs(self.att_saved) do
+			if not IsValid(v.m_TpModel) then continue end
+			v.m_TpModel:Remove()
+		end
+	end
+end
+
+net.Receive("att_data_spwaned_weapon", function()
+	local ent = net.ReadEntity()
+	if not IsValid(ent) then return end
+	local atts = net.ReadTable()
+	local remodel = net.ReadBool()
+	if remodel then
+		ent.remodel = net.ReadString()
+	end
+	ent.att_saved = atts
+	if ent.SetUpAttachmets then
+		ent:SetUpAttachmets(ent.C_Model or ent)
+	end
+end)
+
+function ENT:Event(data)
+	if not data.smoke then return end
+
+	local attack = ents.GetByIndex(tonumber(data.attack))
+	if not IsValid(attack) then return end
+
+	if not self.hookah_ef then
+		self.hookah_ef = ParticleEmitter(self:GetPos())
+		self.data = {}
+		self.data.smoke = self:WorldToLocal(data.smoke)
+		self.data.aim = attack:GetAimVector()
+		self.data.time = CurTime() + 12
+	end
+end

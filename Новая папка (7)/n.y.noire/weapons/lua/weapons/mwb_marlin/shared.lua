@@ -1,0 +1,203 @@
+--[[
+Server Name: ✪ New York Noire | Атмосферный RP-сервер
+Server IP:   46.174.50.110:27015
+File Path:   addons/weapons/lua/weapons/mwb_marlin/shared.lua
+		 __        __              __             ____     _                ____                __             __         
+   _____/ /_____  / /__  ____     / /_  __  __   / __/____(_)__  ____  ____/ / /_  __     _____/ /____  ____ _/ /__  _____
+  / ___/ __/ __ \/ / _ \/ __ \   / __ \/ / / /  / /_/ ___/ / _ \/ __ \/ __  / / / / /    / ___/ __/ _ \/ __ `/ / _ \/ ___/
+ (__  ) /_/ /_/ / /  __/ / / /  / /_/ / /_/ /  / __/ /  / /  __/ / / / /_/ / / /_/ /    (__  ) /_/  __/ /_/ / /  __/ /    
+/____/\__/\____/_/\___/_/ /_/  /_.___/\__, /  /_/ /_/  /_/\___/_/ /_/\__,_/_/\__, /____/____/\__/\___/\__,_/_/\___/_/     
+                                     /____/                                 /____/_____/                                  
+--]]
+
+AddCSLuaFile()
+PrecacheParticleSystem("AC_muzzle_shotgun")
+PrecacheParticleSystem("AC_muzzle_shotgun_db")
+PrecacheParticleSystem("AC_muzzle_pistol_suppressed")
+PrecacheParticleSystem("AC_muzzle_pistol_ejection")
+PrecacheParticleSystem("AC_muzzle_pistol_smoke_barrel")
+PrecacheParticleSystem("AC_muzzle_minigun_smoke_barrel")
+include("animations.lua")
+include("customization.lua")
+
+if CLIENT then
+	killicon.Add("mg_sbeta", "VGUI/entities/mg_sbeta", Color(255, 0, 0, 255))
+	SWEP.WepSelectIcon = surface.GetTextureID("VGUI/spawnicons/icon_cac_weapon_sn_sbeta")
+end
+
+SWEP.ShellsId = "cases357"
+SWEP.AmmoId = "box357"
+
+SWEP.MalfunctionAnimation = {
+	["skip_cycle"] = 0,
+	["anim"] = "Rechamber",
+	["next"] = 1,
+}
+
+SWEP.Base = "mg_base"
+SWEP.PrintName = "Marlin Model 1895 SBL"
+SWEP.Category = "Modern Warfare"
+SWEP.SubCategory = "Marksman Rifles"
+SWEP.Spawnable = true
+SWEP.VModel = Model("models/viper/mw/weapons/v_sbeta.mdl")
+SWEP.WorldModel = Model("models/viper/mw/weapons/w_sbeta.mdl")
+SWEP.DistSound = "Reflection_AR.Distance"
+SWEP.Trigger = {
+	PressedSound = Sound("mw19.sbeta.fire.first"),
+	ReleasedSound = Sound(""),
+	Time = 0.03
+}
+
+SWEP.UseINV = {
+	["box357"] = true
+}
+
+SWEP.Slot = 3
+SWEP.HoldType = "Rifle"
+SWEP.Primary.Sound = Sound("mw19.sbeta.fire")
+SWEP.Primary.Ammo = "357"
+SWEP.Primary.ClipSize = 6
+SWEP.Primary.Automatic = true
+SWEP.Primary.BurstRounds = 1
+SWEP.Primary.BurstDelay = 0
+SWEP.Primary.RPM = 300
+SWEP.CanChamberRound = true
+SWEP.CanDisableAimReload = false
+SWEP.Resource = .003
+
+-- SWEP.Projectile = {
+-- 	Class = "mg_sniper_bullet", --bullet entity class
+-- 	Speed = 16000,
+-- 	Gravity = 10,
+-- 	Penetrate = true
+-- }
+
+SWEP.ParticleEffects = {
+	["MuzzleFlash"] = "AC_muzzle_shotgun",
+	["MuzzleFlash_DB"] = "AC_muzzle_shotgun_db",
+	["MuzzleFlash_Suppressed"] = "AC_muzzle_pistol_suppressed",
+	["Ejection"] = "AC_muzzle_pistol_ejection",
+	["Overheating"] = "AC_muzzle_pistol_smoke_barrel",
+}
+
+SWEP.Reverb = {
+	RoomScale = 50000, --(cubic hu)
+	--how big should an area be before it is categorized as 'outside'?
+	Sounds = {
+		Outside = {
+			Layer = Sound("Atmo_Western.Outside"),
+			Reflection = Sound("Reflection_Shotgun.Outside")
+		},
+		Inside = {
+			Layer = Sound("Atmo_Shotgun.Inside"),
+			Reflection = Sound("Reflection_Shotgun.Inside")
+		}
+	}
+}
+
+SWEP.Firemodes = {
+	[1] = {
+		Name = "Lever-Action",
+		OnSet = function(self)
+			self.Primary.Automatic = false
+
+			return "Firemode_Semi"
+		end
+	},
+}
+
+SWEP.BarrelSmoke = {
+	Particle = "AC_muzzle_minigun_smoke_barrel",
+	Attachment = "muzzle",
+	ShotTemperatureIncrease = 75,
+	TemperatureThreshold = 100, --temperature that triggers smoke
+	TemperatureCooldown = 65 --degrees per second
+}
+
+SWEP.Cone = {
+	Hip = 1, --accuracy while hip
+	Ads = 0.033, --accuracy while aiming
+	Shake = 0.3,
+	Increase = 0.086, --increase cone size by this amount every time we shoot
+	AdsMultiplier = 0.7, --multiply the increase value by this amount while aiming
+	Max = 2.5, --the cone size will not go beyond this size
+	Decrease = 1, -- amount (in seconds) for the cone to completely reset (from max)
+	Seed = 6985 --just give this a random number
+}
+
+SWEP.Recoil = {
+	Vertical = {4, 6.5}, --random value between the 2
+	Horizontal = {-1.75, 2.75}, --random value between the 2
+	Shake = 3, --camera shake
+	AdsMultiplier = 0.7, --multiply the values by this amount while aiming
+	Seed = 3584, --give this a random number until you like the current recoil pattern
+}
+
+SWEP.Bullet = {
+	Damage = {100, 30}, --first value is damage at 0 meters from impact, second value is damage at furthest point in effective range
+	EffectiveRange = 65, --in meters, damage scales within this distance
+	DropOffStartRange = 20, --in meters, damage scales within this distance
+	Range = 150, --in meters, after this distance the bullet stops existing
+	Tracer = false, --show tracer
+	NumBullets = 1, --the amount of bullets to fire
+	PhysicsMultiplier = 1.5, --damage is multiplied by this amount when pushing objects
+	HeadshotMultiplier = 1,
+	Penetration = {
+		DamageMultiplier = 0.95, --how much damaged is multipled by when leaving a surface.
+		MaxCount = 6, --how many times the bullet can penetrate.
+		Thickness = 14, --in hu, how thick an obstacle has to be to stop the bullet.
+	}
+}
+
+SWEP.Zoom = {
+	FovMultiplier = 0.95,
+	ViewModelFovMultiplier = 1,
+	Blur = {
+		EyeFocusDistance = 10
+	}
+}
+
+SWEP.WorldModelOffsets = {
+	Bone = "tag_sling",
+	Angles = Angle(0, 100, -90),
+	Pos = Vector(8.5, -1.5, -5)
+}
+
+SWEP.ViewModelOffsets = {
+	Aim = {
+		Angles = Angle(0, 0, 0),
+		Pos = Vector(0, 3, 0)
+	},
+	Idle = {
+		Angles = Angle(0, 0, 0),
+		Pos = Vector(0, 0, 0)
+	},
+	Inspection = {
+		Bone = "tag_sling",
+		X = {
+			[0] = {
+				Pos = Vector(0, 3, 3),
+				Angles = Angle(40, 0, -30)
+			},
+			[1] = {
+				Pos = Vector(0, 0, 0),
+				Angles = Angle(-10, 0, 0)
+			}
+		},
+		Y = {
+			[0] = {
+				Pos = Vector(0, 0, 0),
+				Angles = Angle(-10, 20, 0)
+			},
+			[1] = {
+				Pos = Vector(4, 0, 1.5),
+				Angles = Angle(10, -20, 0)
+			}
+		}
+	},
+	RecoilMultiplier = 1.75,
+	KickMultiplier = 1.3,
+	AimKickMultiplier = 0.45
+}
+
+SWEP.Shell = "mwb_shelleject_45"

@@ -1,0 +1,6 @@
+"AddonInfo"
+{
+	"name" "DarkRP"
+	"author_name" "Current developer: Falco A.K.A. FPtje Atheos (STEAM_0:0:8944068)"
+	"info" "{"description": "This is an experimental, yet offical addon version of DarkRP. You can modify DarkRP with the DarkRPMod, which can be found here: https://github.com/FPtje/darkrpmodification", "type": "gamemode", "tags": ["roleplay", "build"]}"
+}

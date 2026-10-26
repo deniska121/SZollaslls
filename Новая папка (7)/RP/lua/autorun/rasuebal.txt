@@ -1,0 +1,1193 @@
+if SERVER then
+    AddCSLuaFile()
+end
+
+INV_WEAPON = "weapon"
+INV_ENTITY = "entity"
+INV_AMMO = "ammo"
+INV_FOOD = "food"
+INV_JUNK = "junk"
+
+McINV = McINV or {}
+McINV.inv = McINV.inv or {}
+McINV.bank = McINV.bank or {}
+McINV.Icons = {}
+McINV.drugStock = {}
+McINV.picktime = {}
+
+McINV.picktime_class = {
+    ["mwb_357"] = 3,
+    ["mwb_deagle"] = 4,
+    ["mwb_m1911"] = 3,
+    ["mwb_pm"] = 2.1,
+    ["mwb_m9"] = 3,
+    ["mwb_93r"] = 3,
+    ["mwb_glock21"] = 3.2,
+    ["mwb_glock17"] = 2.5,
+    ["mwb_glock19"] = 2.5,
+    ["mwb_p220"] = 2.6,
+    ["mwb_akm"] = 6,
+    ["mwb_ak74"] = 6,
+    ["mwb_ak74u"] = 6,
+    ["mwb_spapa12"] = 5,
+    ["mwb_m590"] = 6,
+    ["mwb_ithaca"] = 6,
+    ["mwb_mk17"] = 5,
+    ["mwb_marlin"] = 6,
+    ["mwb_kar98"] = 7,
+    ["mwb_c725"] = 7,
+    ["mwb_mp5"] = 6,
+    ["mwb_m4"] = 6,
+    ["mwb_m4a1"] = 6,
+    ["mwb_uzi"] = 5,
+    ["mwb_thompson"] = 5,
+    ["mwb_tec9"] = 3.2,
+    ["mwb_mac10"] = 4,
+    ["mwb_aug"] = 7,
+    ["mwb_auga2"] = 7,
+}
+
+local WeaponNames = {
+    ["mwb_357"] = "Magnum .357",
+    ["mwb_deagle"] = "Desert Eagle",
+    ["mwb_m1911"] = "M1911",
+    ["mwb_pm"] = "ПМ",
+    ["mwb_m9"] = "M9",
+    ["mwb_93r"] = "93R",
+    ["mwb_glock21"] = "Glock 21",
+    ["mwb_glock17"] = "Glock 17",
+    ["mwb_glock19"] = "Glock 19",
+    ["mwb_p220"] = "P220",
+    ["mwb_akm"] = "AKM",
+    ["mwb_ak74"] = "AK-74",
+    ["mwb_ak74u"] = "AK-74U",
+    ["mwb_spapa12"] = "SPAS-12",
+    ["mwb_m590"] = "M590",
+    ["mwb_ithaca"] = "Ithaca",
+    ["mwb_mk17"] = "MK17",
+    ["mwb_marlin"] = "Marlin",
+    ["mwb_kar98"] = "Kar98",
+    ["mwb_c725"] = "C725",
+    ["mwb_mp5"] = "MP5",
+    ["mwb_m4"] = "M4",
+    ["mwb_m4a1"] = "M4A1",
+    ["mwb_uzi"] = "UZI",
+    ["mwb_thompson"] = "Thompson",
+    ["mwb_tec9"] = "TEC-9",
+    ["mwb_mac10"] = "MAC-10",
+    ["mwb_aug"] = "AUG",
+    ["mwb_auga2"] = "AUG A2",
+}
+
+function McINV.GetWeaponName(class)
+    if class == "bandage" then return "Бинт" end
+    return WeaponNames[class] or class
+end
+
+Config = Config or {}
+Config.MaxWeight = 8
+Config.ItemWeights = Config.ItemWeights or {
+    ["bandage"] = 0.2,
+    ["lockpick"] = 0.1,
+}
+
+for k, v in pairs(McINV.picktime_class) do
+    Config.ItemWeights[k] = math.Clamp(v * 0.5, 1, 5)
+end
+
+function McINV.GetItemWeight(itemClass)
+    return Config.ItemWeights[itemClass] or 0.5
+end
+
+function McINV.GetTotalWeight(ply)
+    if not IsValid(ply) then return 0 end
+    if not ply.Inventory then return 0 end
+    local total = 0
+    for _, item in ipairs(ply.Inventory) do
+        total = total + McINV.GetItemWeight(item.class or item)
+    end
+    return math.Round(total, 2)
+end
+
+function McINV.CanAddItem(ply, itemClass)
+    if not IsValid(ply) then return false end
+    local current = McINV.GetTotalWeight(ply)
+    local weight = McINV.GetItemWeight(itemClass)
+    return (current + weight) <= Config.MaxWeight
+end
+
+local gunstates = {
+    { "Отличное", 0.9, Color(0, 255, 0) },
+    { "Хорошее", 0.7, Color(100, 255, 100) },
+    { "Нормальное", 0.5, Color(255, 255, 0) },
+    { "Потёртое", 0.3, Color(255, 150, 0) },
+    { "Убитое", 0.1, Color(255, 0, 0) },
+}
+
+function McINV.GetGunState(gunstate)
+    if not gunstate then return "Отличное", Color(0, 255, 0) end
+    for _, v in ipairs(gunstates) do
+        if gunstate >= v[2] then
+            return v[1], v[3]
+        end
+    end
+    return "Убитое", Color(255, 0, 0)
+end
+
+function McINV.IsHeavyWeapon(class)
+    local heavy = {
+        ["mwb_akm"] = true,
+        ["mwb_ak74"] = true,
+        ["mwb_ak74u"] = true,
+        ["mwb_spapa12"] = true,
+        ["mwb_m590"] = true,
+        ["mwb_ithaca"] = true,
+        ["mwb_mk17"] = true,
+        ["mwb_marlin"] = true,
+        ["mwb_kar98"] = true,
+        ["mwb_c725"] = true,
+        ["mwb_mp5"] = true,
+        ["mwb_m4"] = true,
+        ["mwb_m4a1"] = true,
+        ["mwb_uzi"] = true,
+        ["mwb_thompson"] = true,
+        ["mwb_aug"] = true,
+        ["mwb_auga2"] = true,
+    }
+    return heavy[class] or false
+end
+
+if SERVER then
+    util.AddNetworkString("UpdateInventory")
+    util.AddNetworkString("DropItemFromInventory")
+    util.AddNetworkString("UseItem")
+    util.AddNetworkString("SyncInventory")
+    util.AddNetworkString("GiveWeaponToHands")
+    util.AddNetworkString("PickupProgress")
+    util.AddNetworkString("InventoryUpdated")
+    util.AddNetworkString("RefreshInventoryUI")
+    util.AddNetworkString("ForceInventoryPage")
+    util.AddNetworkString("UnpackBagProgress")
+    util.AddNetworkString("CloseInventoryUI")
+    util.AddNetworkString("UpdateWeaponData")
+
+    local pickupProgress = {}
+    local unpackProgress = {}
+
+    function McINV.SyncInventory(ply)
+        if not IsValid(ply) then return end
+        ply.Inventory = ply.Inventory or {}
+        net.Start("SyncInventory")
+            net.WriteTable(ply.Inventory)
+        net.Send(ply)
+    end
+
+    function McINV.ForceUpdate(ply)
+        if not IsValid(ply) then return end
+        ply.Inventory = ply.Inventory or {}
+        net.Start("InventoryUpdated")
+            net.WriteTable(ply.Inventory)
+        net.Send(ply)
+        McINV.SyncInventory(ply)
+    end
+
+    function McINV.RefreshUI(ply)
+        if not IsValid(ply) then return end
+        net.Start("RefreshInventoryUI")
+        net.Send(ply)
+    end
+
+    function McINV.ForceInventoryPage(ply)
+        if not IsValid(ply) then return end
+        net.Start("ForceInventoryPage")
+        net.Send(ply)
+    end
+
+    function McINV.CloseUI(ply)
+        if not IsValid(ply) then return end
+        net.Start("CloseInventoryUI")
+        net.Send(ply)
+    end
+
+    function McINV.AddItem(ply, itemClass, weaponData)
+        if not IsValid(ply) then return false end
+        if not McINV.CanAddItem(ply, itemClass) then
+            return false
+        end
+        ply.Inventory = ply.Inventory or {}
+        local item = { class = itemClass }
+        if weaponData then
+            if weaponData.clip1 then item.clip1 = weaponData.clip1 end
+            if weaponData.clip2 then item.clip2 = weaponData.clip2 end
+            if weaponData.gunstate then item.gunstate = weaponData.gunstate end
+            if weaponData.att_saved then item.att_saved = weaponData.att_saved end
+            if weaponData.attachments then item.attachments = weaponData.attachments end
+            if weaponData.modifications then item.modifications = weaponData.modifications end
+            if weaponData.ammo_type then item.ammo_type = weaponData.ammo_type end
+            if weaponData.primary_ammo then item.primary_ammo = weaponData.primary_ammo end
+            if weaponData.secondary_ammo then item.secondary_ammo = weaponData.secondary_ammo end
+            if weaponData.weapon_data then item.weapon_data = weaponData.weapon_data end
+        end
+        table.insert(ply.Inventory, item)
+        McINV.ForceUpdate(ply)
+        McINV.RefreshUI(ply)
+        McINV.ForceInventoryPage(ply)
+        return true
+    end
+
+    function McINV.RemoveItem(ply, index)
+        if not IsValid(ply) then return false end
+        ply.Inventory = ply.Inventory or {}
+        if ply.Inventory[index] then
+            table.remove(ply.Inventory, index)
+            McINV.ForceUpdate(ply)
+            McINV.RefreshUI(ply)
+            McINV.ForceInventoryPage(ply)
+            return true
+        end
+        return false
+    end
+
+    function McINV.SpawnWeaponBag(ply, item, spawnPos)
+        local isHeavy = McINV.IsHeavyWeapon(item.class)
+        local bagModel = isHeavy and "models/cityrp/bags/bag_drop.mdl" or "models/cityrp/bags/satchel_drop.mdl"
+        
+        local bag = ents.Create("prop_physics")
+        if not IsValid(bag) then return false end
+        
+        bag:SetModel(bagModel)
+        bag:SetPos(spawnPos)
+        bag:SetAngles(Angle(0, math.random(0, 360), 0))
+        bag:Spawn()
+        bag:Activate()
+        
+        bag.NY_BagWeapon = item.class
+        bag.NY_BagClip1 = item.clip1 or 0
+        bag.NY_BagClip2 = item.clip2 or 0
+        bag.NY_BagGunstate = item.gunstate or 1
+        bag.NY_BagAttachments = item.att_saved or {}
+        bag.NY_BagMods = item.modifications or {}
+        bag.NY_BagAmmoType = item.ammo_type or ""
+        bag.NY_BagPrimaryAmmo = item.primary_ammo or 0
+        bag.NY_BagSecondaryAmmo = item.secondary_ammo or 0
+        bag.NY_BagWeaponData = item.weapon_data or {}
+        bag.NY_IsWeaponBag = true
+        bag.NY_IsHeavy = isHeavy
+        
+        local phys = bag:GetPhysicsObject()
+        if IsValid(phys) then
+            phys:Wake()
+            phys:ApplyForceCenter(ply:GetForward() * 50 + Vector(0, 0, 20))
+        end
+        
+        return true
+    end
+
+    hook.Add("PlayerDisconnected", "McINV.CleanupPickup", function(ply)
+        pickupProgress[ply] = nil
+        unpackProgress[ply] = nil
+    end)
+
+    hook.Add("PlayerSpawn", "McINV.ResetInventory", function(ply)
+        if IsValid(ply) then
+            pickupProgress[ply] = nil
+            unpackProgress[ply] = nil
+            ply.Inventory = ply.Inventory or {}
+            timer.Simple(0.1, function()
+                if IsValid(ply) then
+                    McINV.ForceUpdate(ply)
+                    McINV.RefreshUI(ply)
+                    McINV.ForceInventoryPage(ply)
+                end
+            end)
+        end
+    end)
+
+    net.Receive("GiveWeaponToHands", function(len, ply)
+        if not IsValid(ply) then return end
+        local index = net.ReadUInt(16)
+        if not ply.Inventory or not ply.Inventory[index] then 
+            McINV.ForceUpdate(ply)
+            McINV.RefreshUI(ply)
+            McINV.ForceInventoryPage(ply)
+            McINV.CloseUI(ply)
+            return 
+        end
+        
+        local item = ply.Inventory[index]
+        if McINV.picktime_class[item.class] then
+            local wep = ply:Give(item.class)
+            if IsValid(wep) then
+                if item.clip1 and item.clip1 > 0 then wep:SetClip1(item.clip1) end
+                if item.clip2 and item.clip2 > 0 then wep:SetClip2(item.clip2) end
+                if item.gunstate then wep.gunstate = item.gunstate end
+                if item.att_saved then 
+                    wep.att_saved = item.att_saved
+                    if wep.BuildCustomizedGun then
+                        timer.Simple(0.1, function()
+                            if IsValid(wep) then
+                                wep:BuildCustomizedGun()
+                            end
+                        end)
+                    end
+                end
+                if item.modifications then
+                    wep.modifications = item.modifications
+                    if wep.ApplyModifications then
+                        timer.Simple(0.1, function()
+                            if IsValid(wep) then
+                                wep:ApplyModifications()
+                            end
+                        end)
+                    end
+                end
+                if item.ammo_type then
+                    wep.AmmoType = item.ammo_type
+                end
+                if item.primary_ammo and item.primary_ammo > 0 then
+                    wep:SetClip1(item.primary_ammo)
+                end
+                if item.secondary_ammo and item.secondary_ammo > 0 then
+                    wep:SetClip2(item.secondary_ammo)
+                end
+                if item.weapon_data then
+                    for k, v in pairs(item.weapon_data) do
+                        wep[k] = v
+                    end
+                end
+                ply:SelectWeapon(item.class)
+            end
+            table.remove(ply.Inventory, index)
+            McINV.ForceUpdate(ply)
+            McINV.RefreshUI(ply)
+            McINV.ForceInventoryPage(ply)
+            McINV.CloseUI(ply)
+        else
+            McINV.ForceUpdate(ply)
+            McINV.RefreshUI(ply)
+            McINV.ForceInventoryPage(ply)
+            McINV.CloseUI(ply)
+        end
+    end)
+
+    hook.Add("PlayerButtonDown", "McINV.PKMPickup", function(ply, button)
+        if not IsValid(ply) then return end
+        if button ~= MOUSE_RIGHT then return end
+        if ply.ChoosingChar then return end
+        if not IsFirstTimePredicted() then return end
+        
+        local tr = ply:GetEyeTrace()
+        local ent = tr.Entity
+        
+        if not IsValid(ent) then return end
+        if ply:GetPos():DistToSqr(ent:GetPos()) > 22500 then return end
+        
+        local itemClass = nil
+        local weaponData = nil
+        local pickupTime = 0.8
+        
+        if ent:IsWeapon() then
+            local class = ent:GetClass()
+            if McINV.picktime_class[class] then
+                itemClass = class
+                weaponData = {
+                    clip1 = ent:Clip1(),
+                    clip2 = ent:Clip2(),
+                    gunstate = ent.gunstate or 1,
+                    att_saved = ent.att_saved,
+                    modifications = ent.modifications,
+                    ammo_type = ent.AmmoType,
+                    primary_ammo = ent:Clip1(),
+                    secondary_ammo = ent:Clip2(),
+                    weapon_data = {},
+                }
+                for k, v in pairs(ent) do
+                    if type(v) ~= "function" and type(v) ~= "table" and k ~= "att_saved" and k ~= "modifications" and k ~= "AmmoType" then
+                        weaponData.weapon_data[k] = v
+                    end
+                end
+                pickupTime = math.max(0.5, McINV.picktime_class[class] * 0.2)
+            end
+        end
+        
+        if ent:GetClass() == "ent_bandage" then
+            itemClass = "bandage"
+            pickupTime = 0.5
+        end
+        
+        if ent.IsWeaponDrop and ent.WeaponClass then
+            if McINV.picktime_class[ent.WeaponClass] then
+                itemClass = ent.WeaponClass
+                weaponData = {
+                    clip1 = ent.WeaponClip or 0,
+                    gunstate = ent.WeaponState or 1,
+                    att_saved = ent.Attachments,
+                    modifications = ent.Modifications,
+                    ammo_type = ent.AmmoType,
+                    primary_ammo = ent.WeaponClip or 0,
+                    secondary_ammo = ent.WeaponClip2 or 0,
+                    weapon_data = ent.WeaponData or {},
+                }
+                pickupTime = math.max(0.5, McINV.picktime_class[itemClass] * 0.2)
+            end
+        end
+        
+        if ent:GetClass() == "spawned_weapon" then
+            local class = ent:Geteclass()
+            if class and McINV.picktime_class[class] then
+                itemClass = class
+                weaponData = {
+                    clip1 = ent.WeaponClip1 or 0,
+                    clip2 = ent.WeaponClip2 or 0,
+                    gunstate = ent.gunstate or 1,
+                    att_saved = ent.att_saved or {},
+                    modifications = ent.modifications or {},
+                    ammo_type = ent.AmmoType or "",
+                    primary_ammo = ent.WeaponClip1 or 0,
+                    secondary_ammo = ent.WeaponClip2 or 0,
+                    weapon_data = ent.weapon_data or {},
+                }
+                pickupTime = math.max(0.5, McINV.picktime_class[itemClass] * 0.2)
+            end
+        end
+        
+        if itemClass then
+            if pickupProgress[ply] then return end
+            
+            pickupProgress[ply] = {
+                ent = ent,
+                class = itemClass,
+                data = weaponData,
+                time = pickupTime,
+                start = CurTime(),
+            }
+            
+            net.Start("PickupProgress")
+                net.WriteFloat(pickupTime)
+                net.WriteFloat(0)
+            net.Send(ply)
+        end
+    end)
+
+    hook.Add("Think", "McINV.PickupProgressThink", function()
+        local toRemove = {}
+        
+        for ply, data in pairs(pickupProgress) do
+            if not IsValid(ply) then
+                toRemove[ply] = true
+            elseif not IsValid(data.ent) then
+                toRemove[ply] = true
+                net.Start("PickupProgress")
+                    net.WriteFloat(0)
+                    net.WriteFloat(0)
+                net.Send(ply)
+            elseif ply:GetPos():DistToSqr(data.ent:GetPos()) > 22500 then
+                toRemove[ply] = true
+                net.Start("PickupProgress")
+                    net.WriteFloat(0)
+                    net.WriteFloat(0)
+                net.Send(ply)
+            else
+                local progress = (CurTime() - data.start) / data.time
+                progress = math.min(progress, 1)
+                
+                net.Start("PickupProgress")
+                    net.WriteFloat(data.time)
+                    net.WriteFloat(progress)
+                net.Send(ply)
+                
+                if progress >= 1 then
+                    if IsValid(data.ent) then
+                        if McINV.AddItem(ply, data.class, data.data) then
+                            ply:EmitSound("items/ammo_pickup.wav")
+                            data.ent:Remove()
+                            McINV.ForceUpdate(ply)
+                            McINV.RefreshUI(ply)
+                            McINV.ForceInventoryPage(ply)
+                        end
+                    end
+                    toRemove[ply] = true
+                    net.Start("PickupProgress")
+                        net.WriteFloat(0)
+                        net.WriteFloat(0)
+                    net.Send(ply)
+                end
+            end
+        end
+        
+        for ply in pairs(toRemove) do
+            pickupProgress[ply] = nil
+        end
+    end)
+
+    hook.Add("PlayerCanPickupWeapon", "McINV.PickupWeapon", function(ply, ent)
+        return true
+    end)
+
+    hook.Add("PlayerGiveSWEP", "McINV.PlayerGiveSWEP", function(ply, wep)
+        return 
+    end)
+
+    net.Receive("UseItem", function(len, ply)
+        if not IsValid(ply) then return end
+        local index = net.ReadUInt(16)
+        if not ply.Inventory or not ply.Inventory[index] then 
+            McINV.ForceUpdate(ply)
+            McINV.RefreshUI(ply)
+            McINV.ForceInventoryPage(ply)
+            McINV.CloseUI(ply)
+            return 
+        end
+        
+        local item = ply.Inventory[index]
+        if item.class == "bandage" then
+            if ply.IsBleeding then
+                table.remove(ply.Inventory, index)
+                McINV.ForceUpdate(ply)
+                McINV.RefreshUI(ply)
+                McINV.ForceInventoryPage(ply)
+                McINV.CloseUI(ply)
+                ply.IsBleeding = false
+            end
+        end
+    end)
+
+    net.Receive("DropItemFromInventory", function(len, ply)
+        if not IsValid(ply) then return end
+        local index = net.ReadUInt(16)
+        if not ply.Inventory or not ply.Inventory[index] then 
+            McINV.ForceUpdate(ply)
+            McINV.RefreshUI(ply)
+            McINV.ForceInventoryPage(ply)
+            McINV.CloseUI(ply)
+            return 
+        end
+        
+        local item = ply.Inventory[index]
+        table.remove(ply.Inventory, index)
+        McINV.ForceUpdate(ply)
+        McINV.RefreshUI(ply)
+        McINV.ForceInventoryPage(ply)
+        McINV.CloseUI(ply)
+        
+        local spawnPos = ply:GetPos() + ply:GetForward() * 30 + Vector(0, 0, 10)
+        
+        if item.class == "bandage" then
+            local ent = ents.Create("ent_bandage")
+            if IsValid(ent) then
+                ent:SetPos(spawnPos)
+                ent:Spawn()
+                local phys = ent:GetPhysicsObject()
+                if IsValid(phys) then
+                    phys:Wake()
+                    phys:ApplyForceCenter(ply:GetForward() * 50 + Vector(0, 0, 20))
+                end
+            end
+            return
+        end
+        
+        if McINV.picktime_class[item.class] then
+            McINV.SpawnWeaponBag(ply, item, spawnPos)
+            return
+        end
+        
+        local ent = ents.Create(item.class)
+        if IsValid(ent) then
+            ent:SetPos(spawnPos)
+            ent:Spawn()
+            local phys = ent:GetPhysicsObject()
+            if IsValid(phys) then
+                phys:Wake()
+                phys:ApplyForceCenter(ply:GetForward() * 50 + Vector(0, 0, 20))
+            end
+        end
+    end)
+
+    hook.Add("PlayerUse", "McINV.UnpackWeaponBag", function(ply, ent)
+        if not IsValid(ply) or not IsValid(ent) then return end
+        if not ent.NY_IsWeaponBag then return end
+        if unpackProgress[ply] then return end
+        
+        local unpackTime = ent.NY_IsHeavy and 3.0 or 1.5
+        
+        unpackProgress[ply] = {
+            ent = ent,
+            time = unpackTime,
+            start = CurTime()
+        }
+        
+        net.Start("UnpackBagProgress")
+            net.WriteFloat(unpackTime)
+            net.WriteFloat(0)
+        net.Send(ply)
+        
+        return false
+    end)
+
+    hook.Add("Think", "McINV.UnpackBagThink", function()
+        local toRemove = {}
+        
+        for ply, data in pairs(unpackProgress) do
+            if not IsValid(ply) then
+                toRemove[ply] = true
+            elseif not IsValid(data.ent) then
+                toRemove[ply] = true
+                net.Start("UnpackBagProgress")
+                    net.WriteFloat(0)
+                    net.WriteFloat(0)
+                net.Send(ply)
+            elseif ply:GetPos():DistToSqr(data.ent:GetPos()) > 22500 then
+                toRemove[ply] = true
+                net.Start("UnpackBagProgress")
+                    net.WriteFloat(0)
+                    net.WriteFloat(0)
+                net.Send(ply)
+            else
+                local progress = (CurTime() - data.start) / data.time
+                progress = math.min(progress, 1)
+                
+                net.Start("UnpackBagProgress")
+                    net.WriteFloat(data.time)
+                    net.WriteFloat(progress)
+                net.Send(ply)
+                
+                if progress >= 1 then
+                    if IsValid(data.ent) then
+                        local class = data.ent.NY_BagWeapon
+                        local clip1 = data.ent.NY_BagClip1 or 0
+                        local clip2 = data.ent.NY_BagClip2 or 0
+                        local gunstate = data.ent.NY_BagGunstate or 1
+                        local att_saved = data.ent.NY_BagAttachments or {}
+                        local mods = data.ent.NY_BagMods or {}
+                        local ammoType = data.ent.NY_BagAmmoType or ""
+                        local primaryAmmo = data.ent.NY_BagPrimaryAmmo or 0
+                        local secondaryAmmo = data.ent.NY_BagSecondaryAmmo or 0
+                        local weaponData = data.ent.NY_BagWeaponData or {}
+                        
+                        local spawnPos = data.ent:GetPos()
+                        data.ent:Remove()
+                        
+                        local weapon = ents.Create(class)
+                        if IsValid(weapon) then
+                            weapon:SetPos(spawnPos)
+                            weapon:SetAngles(Angle(0, math.random(0, 360), 0))
+                            weapon:Spawn()
+                            weapon:Activate()
+                            
+                            if clip1 > 0 then weapon:SetClip1(clip1) end
+                            if clip2 > 0 and weapon.SetClip2 then weapon:SetClip2(clip2) end
+                            weapon.gunstate = gunstate
+                            weapon.att_saved = att_saved
+                            weapon.modifications = mods
+                            weapon.AmmoType = ammoType
+                            weapon.NY_IsWeaponDrop = true
+                            weapon.NY_WeaponClass = class
+                            weapon.NY_WeaponClip = clip1
+                            weapon.NY_WeaponClip2 = clip2
+                            weapon.NY_WeaponState = gunstate
+                            weapon.NY_Attachments = att_saved
+                            weapon.NY_Modifications = mods
+                            weapon.NY_AmmoType = ammoType
+                            weapon.NY_WeaponData = weaponData
+                            
+                            for k, v in pairs(weaponData) do
+                                weapon[k] = v
+                            end
+                            
+                            if weapon.BuildCustomizedGun then
+                                timer.Simple(0.1, function()
+                                    if IsValid(weapon) then
+                                        weapon:BuildCustomizedGun()
+                                    end
+                                end)
+                            end
+                            
+                            if weapon.ApplyModifications then
+                                timer.Simple(0.15, function()
+                                    if IsValid(weapon) then
+                                        weapon:ApplyModifications()
+                                    end
+                                end)
+                            end
+                            
+                            local phys = weapon:GetPhysicsObject()
+                            if IsValid(phys) then
+                                phys:Wake()
+                            end
+                        end
+                    end
+                    toRemove[ply] = true
+                    net.Start("UnpackBagProgress")
+                        net.WriteFloat(0)
+                        net.WriteFloat(0)
+                    net.Send(ply)
+                end
+            end
+        end
+        
+        for ply in pairs(toRemove) do
+            unpackProgress[ply] = nil
+        end
+    end)
+
+    net.Receive("SyncInventory", function(len, ply)
+        if IsValid(ply) then
+            McINV.ForceUpdate(ply)
+            McINV.RefreshUI(ply)
+            McINV.ForceInventoryPage(ply)
+        end
+    end)
+
+    hook.Add("PlayerSpawn", "McINV.InitInventory", function(ply)
+        if IsValid(ply) then
+            ply.Inventory = ply.Inventory or {}
+            timer.Simple(0.1, function()
+                if IsValid(ply) then
+                    McINV.ForceUpdate(ply)
+                    McINV.RefreshUI(ply)
+                    McINV.ForceInventoryPage(ply)
+                end
+            end)
+        end
+    end)
+end
+
+if CLIENT then
+    local glass = Material("gmodla/glass.png", "smooth")
+    local drop_icon = Material("mqs/map_markers/b3.png", "smooth")
+    local gun_icon = Material("msd/icons/pistol.png", "smooth")
+    
+    local pickupTime = 0
+    local pickupProgress = 0
+    local isPickingUp = false
+    local unpackTime = 0
+    local unpackProgress = 0
+    local isUnpacking = false
+    local needsUIUpdate = false
+    local forceInventoryPage = false
+    local forceCloseUI = false
+
+    for k, v in pairs(file.Find("materials/gmodla/inv/*", "GAME")) do
+        local exp = string.Explode(".", v)
+        McINV.Icons[exp[1]] = Material("materials/gmodla/inv/" .. v, "smooth")
+    end
+
+    net.Receive("InventoryUpdated", function()
+        if not IsValid(LocalPlayer()) then return end
+        LocalPlayer().Inventory = net.ReadTable()
+        needsUIUpdate = true
+    end)
+
+    net.Receive("RefreshInventoryUI", function()
+        needsUIUpdate = true
+    end)
+
+    net.Receive("ForceInventoryPage", function()
+        forceInventoryPage = true
+        needsUIUpdate = true
+    end)
+
+    net.Receive("CloseInventoryUI", function()
+        forceCloseUI = true
+        needsUIUpdate = true
+    end)
+
+    net.Receive("PickupProgress", function()
+        pickupTime = net.ReadFloat()
+        pickupProgress = net.ReadFloat()
+        isPickingUp = pickupTime > 0
+    end)
+
+    net.Receive("UnpackBagProgress", function()
+        unpackTime = net.ReadFloat()
+        unpackProgress = net.ReadFloat()
+        isUnpacking = unpackTime > 0
+    end)
+
+    hook.Add("HUDPaint", "McINV.PickupProgressHUD", function()
+        if not IsValid(LocalPlayer()) then return end
+        
+        if isPickingUp and pickupProgress > 0 then
+            local w, h = 400, 30
+            local x, y = (ScrW() - w) / 2, ScrH() - 130
+            
+            draw.RoundedBox(8, x, y, w, h, Color(0, 0, 0, 200))
+            local pr = math.min(pickupProgress, 1)
+            draw.RoundedBox(8, x + 4, y + 4, (w - 8) * pr, h - 8, Color(255, 165, 0, 255))
+        end
+        
+        if isUnpacking and unpackProgress > 0 then
+            local w, h = 400, 30
+            local x, y = (ScrW() - w) / 2, ScrH() - 80
+            
+            draw.RoundedBox(8, x, y, w, h, Color(0, 0, 0, 200))
+            local pr = math.min(unpackProgress, 1)
+            draw.RoundedBox(8, x + 4, y + 4, (w - 8) * pr, h - 8, Color(255, 165, 0, 255))
+        end
+    end)
+
+    function McINV.RefreshUI()
+        if IsValid(MSD.F4Menu) then
+            if forceCloseUI then
+                MSD.F4Menu:Remove()
+                forceCloseUI = false
+                needsUIUpdate = false
+                return
+            end
+            
+            if forceInventoryPage then
+                MSD.F4Menu.currentPage = "inventory"
+                forceInventoryPage = false
+                
+                for k, btn in pairs(MSD.F4Menu.buttons or {}) do
+                    if btn and btn:IsValid() and btn.text == "Инвентарь" then
+                        MSD.F4Menu.list.Deselect(btn)
+                        btn.hovered = true
+                    end
+                end
+            end
+            
+            if MSD.F4Menu.canvas then
+                MSD.F4Menu.canvas:Clear()
+                local currentPage = MSD.F4Menu.currentPage or "inventory"
+                if currentPage == "inventory" then
+                    McINV.CreateUI(MSD.F4Menu.canvas)
+                end
+            end
+        end
+        needsUIUpdate = false
+    end
+
+    hook.Add("Think", "McINV.UIRefreshThink", function()
+        if needsUIUpdate then
+            McINV.RefreshUI()
+        end
+    end)
+
+    function McINV.InventoryItem(parent, item, index)
+        local button = vgui.Create("DPanel")
+        button:SetSize(100, 60)
+        button.StaticScale = { w = 1, fixed_h = 60, minw = 250, minh = 60 }
+        button.fade = 0
+        
+        local itemClass = item.class
+        local itemName = McINV.GetWeaponName(itemClass)
+        
+        button.dname = itemName
+        button.dweight = McINV.GetItemWeight(itemClass) .. " кг"
+        button.isWeapon = McINV.picktime_class[itemClass] ~= nil
+        button.gunstate = item.gunstate
+        button.clip1 = item.clip1 or 0
+        button.index = index
+        button.modifications = item.modifications or {}
+        button.att_saved = item.att_saved or {}
+
+        local stateName, stateColor = McINV.GetGunState(item.gunstate)
+        
+        local modText = ""
+        if button.isWeapon then
+            local mods = {}
+            if next(button.att_saved) then table.insert(mods, "AT") end
+            if next(button.modifications) then table.insert(mods, "MOD") end
+            if #mods > 0 then modText = " [" .. table.concat(mods, "+") .. "]" end
+        end
+
+        button.Paint = function(self, w, h)
+            if (self.main and self.main.hover) or (self.sub and self.sub.hover) then
+                self.fade = Lerp(FrameTime() * 7, self.fade, 1)
+            else
+                self.fade = Lerp(FrameTime() * 7, self.fade, 0)
+            end
+            
+            draw.RoundedBox(0, 0, 0, w, h, MSD.Theme["d"])
+            draw.RoundedBox(0, 0, 0, 5, h, MSD.Patern.MainColor["p"])
+            
+            local nameText = self.dname .. modText
+            draw.SimpleText(nameText, "MSDFont.22", 55, 3, MMD.ColorAlpha(MMD.Text["d"], 255 - self.fade * 255), TEXT_ALIGN_LEFT)
+            draw.DrawText(nameText, "MSDFont.22", 55, 3, MMD.ColorAlpha(MSD.Patern.MainColor["p"], self.fade * 255), TEXT_ALIGN_LEFT)
+            
+            draw.SimpleText(self.dweight, "MSDFont.16", 55, 28, MMD.Text["l"], TEXT_ALIGN_LEFT)
+            
+            if self.isWeapon then
+                draw.SimpleText(stateName, "MSDFont.16", 55, 44, stateColor, TEXT_ALIGN_LEFT)
+            end
+            
+            local iconMat = McINV.Icons[itemClass] or MSD.IconRender.Get("models/props_junk/CinderBlock01a.mdl")
+            MSD.DrawTexturedRect(8, 8, 38, 38, iconMat or MSD.Icons48.box, color_white)
+        end
+
+        local dropBtn = MSD.IconButton(button, drop_icon, 5, 5, 46, nil, nil, function()
+            if IsValid(LocalPlayer()) then
+                net.Start("DropItemFromInventory")
+                    net.WriteUInt(index, 16)
+                net.SendToServer()
+                if LocalPlayer().Inventory then
+                    table.remove(LocalPlayer().Inventory, index)
+                    needsUIUpdate = true
+                    forceInventoryPage = true
+                end
+            end
+        end)
+        dropBtn:DockMargin(14, 14, 14, 14)
+        dropBtn:DockPadding(14, 14, 14, 14)
+        dropBtn:Dock(RIGHT)
+        dropBtn:SetSize(32, 32)
+
+        local useIcon = MSD.Icons48.check
+        local useFunc = function()
+            if IsValid(LocalPlayer()) then
+                if button.isWeapon then
+                    net.Start("GiveWeaponToHands")
+                        net.WriteUInt(index, 16)
+                    net.SendToServer()
+                    if LocalPlayer().Inventory then
+                        table.remove(LocalPlayer().Inventory, index)
+                        needsUIUpdate = true
+                        forceInventoryPage = true
+                    end
+                else
+                    net.Start("UseItem")
+                        net.WriteUInt(index, 16)
+                    net.SendToServer()
+                    if LocalPlayer().Inventory then
+                        table.remove(LocalPlayer().Inventory, index)
+                        needsUIUpdate = true
+                        forceInventoryPage = true
+                    end
+                end
+            end
+        end
+        
+        if button.isWeapon then
+            useIcon = gun_icon
+        end
+        
+        local useBtn = MSD.IconButton(button, useIcon, 5, 5, 46, nil, nil, useFunc)
+        useBtn:DockMargin(14, 14, 14, 14)
+        useBtn:DockPadding(14, 14, 14, 14)
+        useBtn:Dock(RIGHT)
+        useBtn:SetSize(32, 32)
+
+        parent:AddItem(button)
+        return button
+    end
+
+    function McINV.CreateUI(parent)
+        if not IsValid(parent) then return end
+        if not IsValid(LocalPlayer()) then return end
+        
+        local list = vgui.Create("MSDPanelList", parent)
+        list:SetSize(parent:GetWide(), parent:GetTall())
+        list:SetPos(0, 0)
+        list:EnableVerticalScrollbar()
+        list:SetSpacing(2)
+        list:SetPadding(0)
+
+        local inv = LocalPlayer().Inventory or {}
+        local curWeight = McINV.GetTotalWeight(LocalPlayer())
+        local maxWeight = Config.MaxWeight or 8
+
+        local header = vgui.Create("DPanel")
+        header:SetSize(list:GetWide(), 50)
+        header.Paint = function(self, w, h)
+            draw.RoundedBox(MSD.Config.Rounded, 0, 0, w, h, MSD.Theme["l"])
+            draw.SimpleText("Инвентарь", "MSDFont.24", 15, 5, MSD.Text.s, TEXT_ALIGN_LEFT)
+            draw.SimpleText(curWeight .. " / " .. maxWeight .. " кг", "MSDFont.20", w - 15, 6, MSD.Text.n, TEXT_ALIGN_RIGHT)
+            
+            local pr = curWeight / maxWeight
+            draw.RoundedBox(4, 15, 38, w - 30, 6, MSD.Patern.MainColor["9"])
+            draw.RoundedBox(4, 15, 38, (w - 30) * math.min(pr, 1), 6, MSD.Patern.MainColor.p)
+        end
+        list:AddItem(header)
+
+        for i, item in ipairs(inv) do
+            McINV.InventoryItem(list, item, i)
+        end
+
+        return list
+    end
+
+    net.Receive("SyncInventory", function()
+        if not IsValid(LocalPlayer()) then return end
+        LocalPlayer().Inventory = net.ReadTable()
+        needsUIUpdate = true
+    end)
+
+    local oldOpenF4 = MSD.OpenF4Menu
+    MSD.OpenF4Menu = function(start)
+        if IsValid(g_Scoreboard) and g_Scoreboard:IsVisible() then return end
+        if IsValid(MSD.F4Menu) then MSD.F4Menu:Remove() return end
+
+        local ply = LocalPlayer()
+        if not IsValid(ply) then return end
+        
+        local SW, SH = ScrW(), ScrH()
+        local hs = 440
+        local openPage
+        local pages = {}
+        local buttons = {
+            {"Профиль", MSD.Icons48.account, function() openPage("player", 3, nil, true) end},
+            {"Инвентарь", MSD.Icons48.briefcase, function() openPage("inventory", 3, nil, true) end},
+        }
+
+        MSD.F4Menu = vgui.Create("MSDSimpleFrame")
+        MSD.F4Menu:SetSize(SW - 20, SH - SH / 6)
+        MSD.F4Menu:SetPos(15, 15)
+        MSD.F4Menu:SetAlpha(1)
+        MSD.F4Menu:AlphaTo(255, 0.5)
+        MSD.F4Menu:MakePopup()
+        MSD.F4Menu.currentPage = "inventory"
+        MSD.F4Menu.buttons = {}
+        MSD.F4Menu.Paint = function(s, w, h)
+            MSD.Blur(s, 2, 2, 255, 0, hs, h)
+            draw.RoundedBox(0, 0, 0, hs, h, MSD.Theme.d)
+            draw.RoundedBox(0, 0, 0, hs, 120, MSD.Theme.d)
+            MSD.DrawTexturedRect(hs / 2 - 146, 0, 293, 118, MSD.Materials.logo, color_white)
+        end
+        MSD.F4Menu.Think = function(self)
+            if input.IsKeyDown(KEY_ESCAPE) or (input.IsKeyDown(KEY_F4) and self:GetAlpha() > 250) then
+                self:Remove()
+            end
+        end
+
+        local menu = MSD.F4Menu
+
+        menu.ClearPage = function(ss, popup, canvas)
+            if IsValid(menu.page) then menu.page:Remove() end
+            menu.page = vgui.Create("DPanel", menu)
+            menu.page:SetSize(math.Clamp((SW - 30 - hs) / ss, 480, 600), menu:GetTall())
+            menu.page:SetPos(hs + 15, 0)
+            menu.page:SetAlpha(1)
+            menu.page:AlphaTo(255, 0.5)
+            menu.page.Paint = function(s, w, h)
+                MSD.Blur(s, 2, 2, 255, 0, w, h)
+                draw.RoundedBox(0, 0, 0, w, h, MSD.Theme.d)
+            end
+            if canvas then
+                menu.canvas = vgui.Create("MSDPanelList", menu.page)
+                menu.canvas:SetSize(menu.page:GetWide(), menu.page:GetTall())
+                menu.canvas:SetPos(0, 0)
+                menu.canvas:SetSpacing(2)
+                menu.canvas:SetPadding(0)
+                menu.canvas:EnableVerticalScrollbar()
+                menu.canvas:EnableHorizontal(true)
+            end
+        end
+
+        function openPage(id, ss, popup, canvas, ...)
+            menu.currentPage = id
+            menu.ClearPage(ss, popup, canvas)
+            pages[id](...)
+        end
+
+        menu.list = vgui.Create("MSDPanelList", menu)
+        menu.list:SetSize(hs, menu:GetTall() - 125)
+        menu.list:SetPos(0, 120)
+        menu.list:EnableVerticalScrollbar()
+        menu.list:SetSpacing(2)
+        menu.list:SetPadding(0)
+        menu.list.IgnoreVbar = true
+        menu.list.Deselect = function(but)
+            if not but then return end
+            but.hovered = true
+            for k, v in pairs(menu.list:GetItems()) do
+                if v and v:IsValid() and v ~= but then
+                    v.hovered = false
+                end
+            end
+        end
+
+        local cur_char = 1
+        if IsValid(ply) then
+            cur_char = ply:GetNWInt("character", 1)
+        end
+
+        local function GetSanityState()
+            local sanity = SanityValue or 100
+            if sanity > 90 then return "заебца"
+            elseif sanity > 70 then return "ну так хуева"
+            elseif sanity > 50 then return "ну пиздецова"
+            elseif sanity > 30 then return "писда"
+            elseif sanity > 20 then return "ты псих ааа!!"
+            else return "э всмысле блин!" end
+        end
+
+        pages["player"] = function()
+            local state = GetSanityState()
+            local panel = vgui.Create("DPanel")
+            panel.StaticScale = { w = 1, fixed_h = 95, minw = 250, minh = 95 }
+            panel.Paint = function(self, w, h)
+                draw.RoundedBox(MSD.Config.Rounded, 0, 0, w, h, MSD.Theme["l"])
+                local name = ply:Name() or "Unknown"
+                local s = draw.SimpleText(name, "MSDFont.32", 10, 5, MSD.Config.MainColor["p"], TEXT_ALIGN_LEFT)
+                if cur_char == 3 then
+                    draw.SimpleText("Нет контрактов", "MSDFont.24", 10, 38, MSD.Config.MainColor["p"], TEXT_ALIGN_LEFT)
+                else
+                    local job = ""
+                    if IsValid(ply) then
+                        job = team.GetName(ply:Team()) or ""
+                    end
+                    s = draw.SimpleText("Контракт: ", "MSDFont.24", 10, 38, MSD.Config.MainColor["p"], TEXT_ALIGN_LEFT)
+                    draw.DrawText(job, "MSDFont.24", 10 + s, 38, MSD.Text["l"], TEXT_ALIGN_LEFT)
+                end
+                s = draw.SimpleText("Рассудок: ", "MSDFont.24", 10, 62, MSD.Config.MainColor["p"], TEXT_ALIGN_LEFT)
+                draw.DrawText(state, "MSDFont.24", s + 10, 62, MSD.Text["l"], TEXT_ALIGN_LEFT)
+            end
+            menu.canvas:AddItem(panel)
+
+            MSD.InfoHeader(menu.canvas, "Здоровье")
+
+            MSD.PanelIcon(menu.canvas, "", MSD.Icons48.heart, function(s, w, h)
+                s.text = "Общее здоровье: " .. LocalPlayer():Health() .. "%"
+            end)
+
+            MSD.PanelIcon(menu.canvas, "", MSD.Icons48.cup, function(s, w, h)
+                local thirst = 0
+                if IsValid(ply) then
+                    thirst = ply:GetNWFloat("thirst", 100)
+                end
+                s.text = "Уровень воды: " .. thirst
+            end)
+
+            MSD.PanelIcon(menu.canvas, "", MSD.Icons48.apple, function(s, w, h)
+                local energy = 0
+                if IsValid(ply) then
+                    energy = ply:GetNWFloat("NoireStamina", 100)
+                end
+                s.text = "Калории: " .. energy
+            end)
+        end
+
+        pages["inventory"] = function()
+            if McINV and McINV.CreateUI then
+                McINV.CreateUI(menu.canvas)
+            else
+                MSD.InfoText(menu.canvas, "Инвентарь не найден")
+            end
+        end
+
+        for k, v in pairs(buttons) do
+            local button = MSD.MenuButton(menu.list, v[2], nil, nil, 250, 50, v[1], function(self)
+                menu.list.Deselect(not v[5] and self or false)
+                v[3]()
+            end)
+            button.text = v[1]
+            table.insert(menu.buttons, button)
+            if k == 1 then
+                menu.list.Deselect(button)
+                v[3]()
+            end
+        end
+    end
+
+    concommand.Add("gmodla_f4", MSD.OpenF4Menu)
+
+    hook.Add("InitPostEntity", "McINV.RequestInvOnStart", function()
+        timer.Simple(0.5, function()
+            if IsValid(LocalPlayer()) then
+                net.Start("SyncInventory")
+                net.SendToServer()
+            end
+        end)
+    end)
+end

@@ -1,0 +1,106 @@
+--[[
+Server Name: ✪ New York Noire | Атмосферный RP-сервер
+Server IP:   46.174.50.110:27015
+File Path:   addons/gtools/lua/weapons/gmod_tool/stools/starfield.lua
+		 __        __              __             ____     _                ____                __             __         
+   _____/ /_____  / /__  ____     / /_  __  __   / __/____(_)__  ____  ____/ / /_  __     _____/ /____  ____ _/ /__  _____
+  / ___/ __/ __ \/ / _ \/ __ \   / __ \/ / / /  / /_/ ___/ / _ \/ __ \/ __  / / / / /    / ___/ __/ _ \/ __ `/ / _ \/ ___/
+ (__  ) /_/ /_/ / /  __/ / / /  / /_/ / /_/ /  / __/ /  / /  __/ / / / /_/ / / /_/ /    (__  ) /_/  __/ /_/ / /  __/ /    
+/____/\__/\____/_/\___/_/ /_/  /_.___/\__, /  /_/ /_/  /_/\___/_/ /_/\__,_/_/\__, /____/____/\__/\___/\__,_/_/\___/_/     
+                                     /____/                                 /____/_____/                                  
+--]]
+
+if !game.SinglePlayer() then TOOL.AddToMenu = false return end //Not available in Multiplayer
+
+TOOL.Category = "Effects"
+TOOL.Name = "#Starfield"
+TOOL.Command = nil
+TOOL.ConfigName = ""
+
+//Default values
+TOOL.ClientConVar["magnitude"] = 4
+
+//Add language descriptions
+if (CLIENT) then
+language.Add("Tool.starfield.name", "Starfield Tool")
+language.Add("Tool.starfield.desc", "Creates a starfield effect")
+language.Add("Tool.starfield.0", "Left-Click: Update starfield layer  Right-Click: Remove effect")
+language.Add("Cleanup_Starfields", "Starfield Effects")
+language.Add("Cleaned_Starfields", "Cleaned up all Starfield Effects")
+language.Add("Undone_Starfield", "Starfield Effect undone")
+end
+
+//Sandbox-related stuff
+cleanup.Register("Starfields")
+
+//Add starfield layer
+function TOOL:LeftClick(trace)
+
+//Only serverside now
+if (CLIENT) then return false end
+
+//Get all entities on the level
+for _, fire in pairs(ents.GetAll()) do
+
+	//Kill all starfields
+	if fire && fire:IsValid() && !fire:GetPhysicsObject():IsValid() && fire:GetClass() == "env_starfield" && !fire:IsPlayer() && !fire:IsNPC() && !fire:IsWorld() then
+	fire:Fire("Kill", "", 0)
+	end
+
+end
+
+//Retreive settings
+local magnitude = math.Clamp(self:GetClientNumber("magnitude"), 1, 128)
+
+//Create effect layer and assign settings
+local starfield = ents.Create("env_starfield")
+if !starfield || !starfield:IsValid() then return false end
+starfield:SetPos(self:GetOwner():GetPos())
+//starfield:SetParent(self:GetOwner())
+
+//Spawn effect
+starfield:Spawn()
+starfield:Activate()
+starfield:Fire("SetDensity", tostring(magnitude), 0)
+starfield:Fire("TurnOn", "", 0)
+
+//Make sure we can undo
+undo.Create("Starfield")
+undo.AddEntity(starfield)
+undo.SetPlayer(self:GetOwner())
+undo.Finish()
+cleanup.Add(self:GetOwner(), "Starfields", starfield)
+
+return false
+
+end
+
+
+//Extinguish fire in radius
+function TOOL:RightClick(trace)
+
+//Only serverside now
+if (CLIENT) then return false end
+
+//Get all entities on the level
+for _, fire in pairs(ents.GetAll()) do
+
+	//Kill all starfields
+	if fire && fire:IsValid() && !fire:GetPhysicsObject():IsValid() && fire:GetClass() == "env_starfield" && !fire:IsPlayer() && !fire:IsNPC() && !fire:IsWorld() then
+	fire:Fire("Kill", "", 0)
+	end
+
+end
+
+end
+
+//Build Tool Menu
+function TOOL.BuildCPanel(panel)
+
+//Header
+panel:AddControl( "Header", { Text = "#Tool.starfield.name", Description = "#Tool.starfield.desc" } )
+
+//Magnitude
+panel:AddControl( "Slider", { Label = "Magnitude", Type = "Integer", Min = "1", Max = "128", Command ="starfield_magnitude" } )
+
+end

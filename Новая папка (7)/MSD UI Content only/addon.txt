@@ -1,0 +1,6 @@
+"AddonInfo"
+{
+	"name" "MSD UI Content only"
+	"author_name" "Author Name"
+	"info" "{"title":"MSD UI Content only","type":"ServerContent","tags":["fun","roleplay","realism"],"ignore":["*.txt",".git","*,git",".gitattributes","*.lua"]}"
+}

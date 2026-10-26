@@ -1,0 +1,60 @@
+--[[
+Server Name: ✪ New York Noire | Атмосферный RP-сервер
+Server IP:   46.174.50.110:27015
+File Path:   addons/weapons/lua/weapons/mg_base/modules/shared/sh_datatables.lua
+		 __        __              __             ____     _                ____                __             __         
+   _____/ /_____  / /__  ____     / /_  __  __   / __/____(_)__  ____  ____/ / /_  __     _____/ /____  ____ _/ /__  _____
+  / ___/ __/ __ \/ / _ \/ __ \   / __ \/ / / /  / /_/ ___/ / _ \/ __ \/ __  / / / / /    / ___/ __/ _ \/ __ `/ / _ \/ ___/
+ (__  ) /_/ /_/ / /  __/ / / /  / /_/ / /_/ /  / __/ /  / /  __/ / / / /_/ / / /_/ /    (__  ) /_/  __/ /_/ / /  __/ /    
+/____/\__/\____/_/\___/_/ /_/  /_.___/\__, /  /_/ /_/  /_/\___/_/ /_/\__,_/_/\__, /____/____/\__/\___/\__,_/_/\___/_/     
+                                     /____/                                 /____/_____/                                  
+--]]
+
+AddCSLuaFile()
+
+function SWEP:SetupDataTables()
+    self:NetworkVar("Float", "0", "NextReloadTime")
+    self:NetworkVar("Float", "1", "NextMagTime")
+    self:NetworkVar("Float", "2", "NextDrawTime")
+    self:NetworkVar("Float", "3", "NextHolsterTime")
+    self:NetworkVar("Float", "4", "AimDelta")
+    self:NetworkVar("Float", "5", "Cone")
+    self:NetworkVar("Float", "6", "NextSprintTime")
+    self:NetworkVar("Float", "7", "NextInspectTime")
+    self:NetworkVar("Float", "8", "NextFiremodeTime")
+    self:NetworkVar("Float", "9", "NextMeleeTime")
+    self:NetworkVar("Float", "14", "TriggerDelta")
+    self:NetworkVar("Float", "15", "NextAimModeTime")
+    self:NetworkVar("Float", "20", "AimModeDelta")
+    self:NetworkVar("Float", "21", "BreathingDelta")
+    self:NetworkVar("Float", "22", "GunState")
+    self:NetworkVar("Bool", "0", "HasFilledMag")
+    --self:NetworkVar("Bool", "1", "NeedsToEquip")
+    self:NetworkVar("Bool", "2", "IsReloading")
+    self:NetworkVar("Bool", "3", "IsHolstering")
+    self:NetworkVar("Bool", "4", "IsAiming")
+    self:NetworkVar("Bool", "5", "IsSprinting")
+    self:NetworkVar("Bool", "6", "HasPumped")
+    self:NetworkVar("Bool", "14", "IsTrigger")
+    self:NetworkVar("Bool", "15", "HasShotAfterTrigger")
+    self:NetworkVar("Bool", "20", "IsCustomizing")
+    self:NetworkVar("Bool", "21", "ToggleAim")
+    self:NetworkVar("Bool", "22", "Safety")
+    self:NetworkVar("Bool", "23", "AimModeUsePressed")
+    self:NetworkVar("Bool", "24", "HasRunOutOfBreath")
+    self:NetworkVar("Bool", "25", "Flashlight")
+    self:NetworkVar("Bool", "26", "LaserIsOn")
+    self:NetworkVar("Bool", "27", "Malfunction")
+
+    self:NetworkVar("Entity", "0", "NextWeapon")
+
+    self:NetworkVar("Int", "0", "SprayRounds")
+    self:NetworkVar("Int", "1", "Firemode")
+    self:NetworkVar("Int", "2", "BurstRounds")
+    self:NetworkVar("Int", "3", "PenetrationCount")
+    self:NetworkVar("Int", "4", "AimMode")
+
+    self:NetworkVar("String", "0", "Camo")
+
+    self:NetworkVar("Angle", "0", "BreathingAngle")
+end

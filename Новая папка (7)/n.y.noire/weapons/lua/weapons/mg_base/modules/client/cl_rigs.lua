@@ -1,0 +1,38 @@
+--[[
+Server Name: ✪ New York Noire | Атмосферный RP-сервер
+Server IP:   46.174.50.110:27015
+File Path:   addons/weapons/lua/weapons/mg_base/modules/client/cl_rigs.lua
+		 __        __              __             ____     _                ____                __             __         
+   _____/ /_____  / /__  ____     / /_  __  __   / __/____(_)__  ____  ____/ / /_  __     _____/ /____  ____ _/ /__  _____
+  / ___/ __/ __ \/ / _ \/ __ \   / __ \/ / / /  / /_/ ___/ / _ \/ __ \/ __  / / / / /    / ___/ __/ _ \/ __ `/ / _ \/ ___/
+ (__  ) /_/ /_/ / /  __/ / / /  / /_/ / /_/ /  / __/ /  / /  __/ / / / /_/ / / /_/ /    (__  ) /_/  __/ /_/ / /  __/ /    
+/____/\__/\____/_/\___/_/ /_/  /_.___/\__, /  /_/ /_/  /_/\___/_/ /_/\__,_/_/\__, /____/____/\__/\___/\__,_/_/\___/_/     
+                                     /____/                                 /____/_____/                                  
+--]]
+
+AddCSLuaFile()
+
+SWEP.Rigs = {
+    [0] = "c_hands",
+    [1] = Model("models/viper/mw/rigs/arms/mp_western_vm_arms.mdl"),
+    [2] = Model("models/viper/mw/rigs/sleeves/mp_eastern_vm_arms_gorka.mdl"),
+    [3] = Model("models/viper/mw/rigs/sleeves/mp_western_vm_arms_fireteam_west.mdl"),
+    [4] = Model("models/viper/mw/rigs/sleeves/mp_western_vm_arms_fireteam_west_fullsleeved.mdl"),
+	[5] = Model("models/viper/MW/arms/mp_eastern_vm_sleeve_yegor.mdl"),
+}
+
+MGBASE_RIGS_COUNT = 5
+MGBASE_RIGS_SKIN_COUNT = 25
+
+SWEP.Gloves = {
+    Model("models/viper/mw/rigs/gloves/compacted_base.mdl"),
+    Model("models/viper/mw/rigs/gloves/mechanix_base.mdl"),
+    Model("models/viper/mw/rigs/gloves/oakley_base.mdl"),
+    Model("models/viper/mw/rigs/gloves/technician_base.mdl"),
+    Model("models/viper/mw/rigs/gloves/nomex_base.mdl"),
+}
+
+MGBASE_GLOVES_COUNT = 5
+MGBASE_GLOVES_SKIN_COUNT = 19
+
+--leaving this here to not break shit

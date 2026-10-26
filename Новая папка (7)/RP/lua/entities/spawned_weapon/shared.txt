@@ -1,0 +1,24 @@
+-- spawned_weapon/shared.lua
+ENT.Type = "anim"
+ENT.Base = "base_gmodentity"
+ENT.PrintName = "Spawned Weapon"
+ENT.Author = "Rickster"
+ENT.Spawnable = false
+ENT.AdminSpawnable = false
+ENT.TriggeEvent = true
+
+function ENT:SetupDataTables()
+	self:NetworkVar("String", 0, "eclass")
+end
+
+function ENT:LookupBoneCached(model, name)
+	if (model.cachedBones == nil) then
+		model.cachedBones = {}
+	end
+
+	if (model.cachedBones[name] == nil) then
+		model.cachedBones[name] = model:LookupBone(name)
+	end
+
+	return model.cachedBones[name]
+end

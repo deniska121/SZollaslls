@@ -1,0 +1,150 @@
+-- spawned_weapon/init.lua (СЕРВЕРНАЯ ЧАСТЬ)
+AddCSLuaFile()
+
+if SERVER then
+    util.AddNetworkString("att_data_spwaned_weapon")
+    util.AddNetworkString("spawned_weapon_sync")
+    
+    function ENT:Initialize()
+        self:SetModel(self:GetModel() or "models/weapons/w_pistol.mdl")
+        self:PhysicsInit(SOLID_VPHYSICS)
+        self:SetMoveType(MOVETYPE_VPHYSICS)
+        self:SetSolid(SOLID_VPHYSICS)
+        
+        local phys = self:GetPhysicsObject()
+        if IsValid(phys) then
+            phys:Wake()
+            phys:EnableMotion(true)
+        end
+        
+        -- Если есть сохраненные обвесы, отправляем клиенту
+        if self.att_saved and next(self.att_saved) ~= nil then
+            timer.Simple(0.2, function()
+                if IsValid(self) then
+                    net.Start("att_data_spwaned_weapon")
+                        net.WriteEntity(self)
+                        net.WriteTable(self.att_saved or {})
+                        net.WriteBool(self.remodel or false)
+                        if self.remodel then
+                            net.WriteString(self:GetModel())
+                        end
+                    net.Broadcast()
+                end
+            end)
+        end
+    end
+    
+    function ENT:SetupDataTables()
+        self:NetworkVar("String", 0, "eclass")
+        self:NetworkVar("Int", 0, "WeaponClip1")
+        self:NetworkVar("Int", 1, "WeaponClip2")
+        self:NetworkVar("Float", 0, "WeaponGunstate")
+    end
+    
+    -- Функция для установки модификаций
+    function ENT:SetAttachments(attachments)
+        self.att_saved = attachments or {}
+        
+        -- Отправляем обвесы всем клиентам
+        timer.Simple(0.1, function()
+            if IsValid(self) then
+                net.Start("att_data_spwaned_weapon")
+                    net.WriteEntity(self)
+                    net.WriteTable(self.att_saved or {})
+                    net.WriteBool(false)
+                net.Broadcast()
+            end
+        end)
+    end
+    
+    -- При подборе оружия
+    function ENT:OnPickup(ply)
+        if not IsValid(ply) then return end
+        
+        -- Сохраняем данные для инвентаря
+        local class = self:Geteclass() or self:GetClass()
+        local clip1 = self:GetWeaponClip1() or 0
+        local clip2 = self:GetWeaponClip2() or 0
+        local gunstate = self:GetWeaponGunstate() or 1
+        local att_saved = self.att_saved or {}
+        
+        -- Отправляем данные в инвентарь
+        if McINV and McINV.AddItem then
+            local data = {
+                clip1 = clip1,
+                clip2 = clip2,
+                gunstate = gunstate,
+                att_saved = att_saved
+            }
+            if McINV.AddItem(ply, class, data) then
+                ply:EmitSound("items/ammo_pickup.wav")
+                self:Remove()
+                return true
+            end
+        end
+        
+        return false
+    end
+    
+    -- При дропе оружия из инвентаря
+    function ENT:SpawnFromInventory(ply, itemData, spawnPos)
+        if not IsValid(ply) or not itemData then return false end
+        
+        local class = itemData.class
+        local clip1 = itemData.clip1 or 0
+        local clip2 = itemData.clip2 or 0
+        local gunstate = itemData.gunstate or 1
+        local att_saved = itemData.att_saved or {}
+        
+        local spawned = ents.Create("spawned_weapon")
+        if not IsValid(spawned) then return false end
+        
+        spawned:SetPos(spawnPos)
+        spawned:SetAngles(Angle(0, ply:EyeAngles().yaw, 0))
+        
+        -- Устанавливаем модель оружия
+        local weaponData = weapons.Get(class)
+        if weaponData then
+            spawned:SetModel(weaponData.WorldModel or weaponData.Model or "models/weapons/w_pistol.mdl")
+        else
+            spawned:SetModel("models/weapons/w_pistol.mdl")
+        end
+        
+        spawned:Seteclass(class)
+        spawned:SetWeaponClip1(clip1)
+        spawned:SetWeaponClip2(clip2)
+        spawned:SetWeaponGunstate(gunstate)
+        spawned.att_saved = att_saved
+        spawned.remodel = false
+        
+        spawned:Spawn()
+        spawned:Activate()
+        
+        -- Отправляем обвесы клиентам
+        timer.Simple(0.1, function()
+            if IsValid(spawned) then
+                net.Start("att_data_spwaned_weapon")
+                    net.WriteEntity(spawned)
+                    net.WriteTable(att_saved or {})
+                    net.WriteBool(false)
+                net.Broadcast()
+            end
+        end)
+        
+        local phys = spawned:GetPhysicsObject()
+        if IsValid(phys) then
+            phys:Wake()
+            phys:ApplyForceCenter(ply:GetForward() * 50 + Vector(0, 0, 20))
+        end
+        
+        return true
+    end
+    
+    -- Хук для подбора spawned_weapon
+    hook.Add("PlayerUse", "SpawnedWeapon_Pickup", function(ply, ent)
+        if not IsValid(ply) or not IsValid(ent) then return end
+        if ent:GetClass() ~= "spawned_weapon" then return end
+        
+        return ent:OnPickup(ply)
+    end)
+end
